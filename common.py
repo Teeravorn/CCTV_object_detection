@@ -4,8 +4,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-TRAIN_IMG_DIR = ROOT / "train"
-TEST_IMG_DIR = ROOT / "test"
+TRAIN_IMG_DIR = ROOT / "data_source" / "train"
+TEST_IMG_DIR = ROOT / "data_source" / "test"
 TRAIN_CSV = ROOT / "train.csv"
 SAMPLE_SUB = ROOT / "sample_submission.csv"
 

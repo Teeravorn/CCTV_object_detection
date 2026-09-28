@@ -20,6 +20,9 @@ def main():
     ap.add_argument("--weights", required=True, type=Path)
     ap.add_argument("--imgsz", type=int, default=640, help="YOLO only")
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--id-style", choices=["file", "sample"], default="file",
+                    help="file: test file name as on Kaggle (1068_20260825_060110.jpg) - scored 0 with 'sample'; "
+                         "sample: the long dataset_..._annotated_... name from sample_submission.csv")
     args = ap.parse_args()
 
     sub_ids = pd.read_csv(SAMPLE_SUB)["image_id"].drop_duplicates().tolist()
@@ -37,8 +40,9 @@ def main():
         if not boxes:
             # competition rules: no rows (and no placeholder/dummy boxes) for images without detections
             empty += 1
+        image_id = file_of[sid] if args.id_style == "file" else sid
         for cls, score, x1, y1, x2, y2 in boxes:
-            rows.append((sid, cls, round(score, 5), round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
+            rows.append((image_id, cls, round(score, 5), round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
 
     out = pd.DataFrame(rows, columns=["image_id", "class_id", "confidence", "x1", "y1", "x2", "y2"])
     out.insert(0, "id", range(len(out)))
