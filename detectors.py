@@ -5,6 +5,8 @@ Each detector returns {file_name: [(class_id, score, x1, y1, x2, y2), ...]} in o
 import time
 from pathlib import Path
 
+from common import NUM_CLASSES
+
 # Keep low-confidence boxes: mAP needs the full precision/recall curve.
 EVAL_CONF = 0.001
 MAX_DET = 300
@@ -50,8 +52,11 @@ class RFDETRDetector:
             if not isinstance(dets, list):
                 dets = [dets]
             for p, d in zip(chunk, dets):
+                # The head has num_classes + 1 logits; the last one is the DETR "no object" slot, which
+                # top-k can still pick at very low thresholds (class_id == NUM_CLASSES). Drop it.
                 out[Path(p).name] = [(int(c), float(s), *map(float, xy))
-                                     for c, s, xy in zip(d.class_id, d.confidence, d.xyxy)]
+                                     for c, s, xy in zip(d.class_id, d.confidence, d.xyxy)
+                                     if c < NUM_CLASSES]
         return out
 
 
