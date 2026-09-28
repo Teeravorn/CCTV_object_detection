@@ -1,6 +1,7 @@
 """Compare trained YOLO26 and RF-DETR on the held-out validation cameras.
 
 Both models are scored by the same pycocotools evaluator on the same images, with conf>=0.001.
+The headline metric is mAP50, matching the Kaggle leaderboard (pycocotools, IoU 0.5, maxDets 100).
 
 Usage:
   python evaluate.py --yolo runs/yolo26s/weights/best.pt --rfdetr runs/rfdetr_medium/checkpoint_best_total.pth
@@ -38,7 +39,7 @@ def main():
         m["ms_per_image"] = ms
         m["weights"] = str(weights)
         results[det.name] = m
-        print(f"{det.name:8s} mAP50-95={m['mAP50-95']:.4f}  mAP50={m['mAP50']:.4f}  {ms:.1f} ms/img")
+        print(f"{det.name:8s} mAP50={m['mAP50']:.4f} (Kaggle metric)  mAP50-95={m['mAP50-95']:.4f}  {ms:.1f} ms/img")
         del det
 
     if not results:
@@ -46,17 +47,17 @@ def main():
 
     names = list(results)
     lines = ["| metric | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
-    for key in ["mAP50-95", "mAP50", "mAP75", "AP_small"]:
+    for key in ["mAP50", "mAP50-95", "mAP75", "AP_small"]:
         lines.append(f"| {key} | " + " | ".join(fmt(results[n][key]) for n in names) + " |")
     lines.append("| ms / image | " + " | ".join(f"{results[n]['ms_per_image']:.1f}" for n in names) + " |")
-    lines += ["", "Per-class mAP50-95", "", "| class | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+    lines += ["", "Per-class AP50", "", "| class | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
     for c in CLASS_NAMES:
-        lines.append(f"| {c} | " + " | ".join(fmt(results[n]["per_class"].get(c, {}).get("mAP50-95"))
+        lines.append(f"| {c} | " + " | ".join(fmt(results[n]["per_class"].get(c, {}).get("mAP50"))
                                                for n in names) + " |")
     if len(names) == 2:
         a, b = names
-        winner = a if results[a]["mAP50-95"] >= results[b]["mAP50-95"] else b
-        lines += ["", f"**Better on mAP50-95: {winner}**"]
+        winner = a if results[a]["mAP50"] >= results[b]["mAP50"] else b
+        lines += ["", f"**Better on mAP50 (Kaggle metric): {winner}**"]
 
     table = "\n".join(lines)
     print("\n" + table)

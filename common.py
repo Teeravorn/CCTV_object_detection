@@ -16,7 +16,8 @@ RUNS_DIR = ROOT / "runs"
 RESULTS_DIR = ROOT / "results"
 
 NUM_CLASSES = 8
-CLASS_NAMES = [f"class_{i}" for i in range(NUM_CLASSES)]
+# From the Kaggle Data page (class_id -> name)
+CLASS_NAMES = ["Car", "Motorcycle", "Bus", "Truck", "Tuktuk", "Van", "Pickup", "Songthaew"]
 
 # Test cameras (1068, 1072, 1192, 1439, 227) never appear in train, so validation must also be
 # unseen cameras. These three cover all 8 classes (incl. rare class 4/5/6/7) and are ~20% of images.
@@ -45,7 +46,8 @@ def coco_evaluate(predictions: dict, gt_json: Path = VAL_GT_JSON) -> dict:
     """Evaluate predictions with pycocotools.
 
     predictions: {file_name: [(class_id, score, x1, y1, x2, y2), ...]}
-    Returns overall mAP@[.5:.95], mAP@.5, mAP@.75, AP_small and per-class mAP@[.5:.95] / mAP@.5.
+    Kaggle scores mAP@.5 ("mAP50"). Returns overall mAP@[.5:.95], mAP@.5, mAP@.75, AP_small and
+    per-class mAP@[.5:.95] / mAP@.5.
     """
     import contextlib
     import io
@@ -74,7 +76,8 @@ def coco_evaluate(predictions: dict, gt_json: Path = VAL_GT_JSON) -> dict:
     with contextlib.redirect_stdout(io.StringIO()):
         dt = gt.loadRes(dets)
         ev = COCOeval(gt, dt, iouType="bbox")
-        ev.params.maxDets = [1, 10, 300]
+        # Kaggle: pycocotools, default COCO maxDets=100 (applied per image per class)
+        ev.params.maxDets = [1, 10, 100]
         ev.evaluate()
         ev.accumulate()
         ev.summarize()

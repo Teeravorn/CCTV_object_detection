@@ -35,8 +35,7 @@ def main():
     for sid in sub_ids:
         boxes = preds.get(file_of[sid], [])
         if not boxes:
-            # keep every image in the file, like sample_submission's placeholder row
-            boxes = [(0, 0.01, 0, 0, 1, 1)]
+            # competition rules: no rows (and no placeholder/dummy boxes) for images without detections
             empty += 1
         for cls, score, x1, y1, x2, y2 in boxes:
             rows.append((sid, cls, round(score, 5), round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))

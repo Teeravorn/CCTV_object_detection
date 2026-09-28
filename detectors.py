@@ -10,6 +10,14 @@ from common import NUM_CLASSES
 # Keep low-confidence boxes: mAP needs the full precision/recall curve.
 EVAL_CONF = 0.001
 MAX_DET = 300
+# Boxes predicted (partly) outside the image get clamped to the border and can collapse to zero
+# width/height (e.g. y1 == y2 == 288). Drop anything thinner than this many pixels.
+MIN_SIZE = 1.0
+
+
+def _keep(xyxy) -> bool:
+    x1, y1, x2, y2 = xyxy
+    return x2 - x1 >= MIN_SIZE and y2 - y1 >= MIN_SIZE
 
 
 class YoloDetector:
@@ -31,7 +39,8 @@ class YoloDetector:
                 xyxy = b.xyxy.cpu().numpy()
                 cls = b.cls.cpu().numpy().astype(int)
                 conf = b.conf.cpu().numpy()
-                out[Path(p).name] = [(int(c), float(s), *map(float, xy)) for c, s, xy in zip(cls, conf, xyxy)]
+                out[Path(p).name] = [(int(c), float(s), *map(float, xy))
+                                     for c, s, xy in zip(cls, conf, xyxy) if _keep(xy)]
         return out
 
 
@@ -56,7 +65,7 @@ class RFDETRDetector:
                 # top-k can still pick at very low thresholds (class_id == NUM_CLASSES). Drop it.
                 out[Path(p).name] = [(int(c), float(s), *map(float, xy))
                                      for c, s, xy in zip(d.class_id, d.confidence, d.xyxy)
-                                     if c < NUM_CLASSES]
+                                     if c < NUM_CLASSES and _keep(xy)]
         return out
 
 
