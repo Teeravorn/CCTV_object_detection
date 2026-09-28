@@ -172,7 +172,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", default="medium", choices=VARIANTS)
     ap.add_argument("--epochs", type=int, default=50)
-    ap.add_argument("--batch", type=int, default=4)
+    ap.add_argument("--batch", type=lambda s: s if s == "auto" else int(s), default=4,
+                    help="int, or 'auto' = rfdetr probes the largest batch that fits and sets grad accum to reach 16")
     ap.add_argument("--grad-accum", type=int, default=4, help="keep batch * grad_accum = 16 (notebook)")
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--resolution", type=int, default=None,
