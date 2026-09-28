@@ -44,6 +44,7 @@ def main():
         num_workers=args.workers,
         early_stopping=True,
         early_stopping_patience=args.patience,
+        run_test=False,  # no labelled test split; the real test/ set is scored via predict.py
         tensorboard=True,
         progress_bar="tqdm",
         **kwargs,

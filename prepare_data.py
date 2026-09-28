@@ -85,9 +85,8 @@ def coco_dict(df, names, sizes):
 def write_coco(df, split_images, sizes):
     if COCO_DIR.exists():
         shutil.rmtree(COCO_DIR)
-    # RF-DETR expects train/ valid/ test/ ; test is a copy of valid (only used if run_test=True)
-    for split, names in [("train", split_images["train"]), ("valid", split_images["val"]),
-                         ("test", split_images["val"])]:
+    # RF-DETR only reads test/ when run_test=True, which train_rfdetr.py keeps off
+    for split, names in [("train", split_images["train"]), ("valid", split_images["val"])]:
         out = COCO_DIR / split
         out.mkdir(parents=True)
         for name in names:
