@@ -1,12 +1,13 @@
 """Fine-tune RF-DETR (COCO-pretrained) on the traffic dataset.
 
-Usage:  python train_rfdetr.py --variant medium --epochs 50
-Best weights -> runs/rfdetr_medium/checkpoint_best_total.pth
+Usage:  python train_rfdetr.py --variant medium --epochs 50 [--aug strong]
+Best weights -> runs/rfdetr_medium[_os][_aug]/checkpoint_best_total.pth
+(_os when data/ was built with prepare_data.py --oversample, _aug with --aug strong)
 """
 import argparse
 import sys
 
-from common import COCO_DIR, RUNS_DIR
+from common import COCO_DIR, RUNS_DIR, run_suffix
 
 # rfdetr prints its metric tables with `rich`; the default Windows cp1252 console crashes on them
 for stream in (sys.stdout, sys.stderr):
@@ -26,6 +27,8 @@ def main():
                     help="default: model's native (nano 384, small 512, medium 576, large 704); must be /32")
     ap.add_argument("--patience", type=int, default=15)
     ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--aug", choices=["default", "strong"], default="default",
+                    help="strong: HorizontalFlip + photometric (fog/blur/noise/JPEG/...), see augment.py")
     args = ap.parse_args()
 
     import rfdetr
@@ -34,9 +37,12 @@ def main():
     kwargs = {}
     if args.resolution:
         kwargs["resolution"] = args.resolution
+    if args.aug == "strong":
+        from augment import rfdetr_aug_config
+        kwargs["aug_config"] = rfdetr_aug_config()
     model.train(
         dataset_dir=str(COCO_DIR),
-        output_dir=str(RUNS_DIR / f"rfdetr_{args.variant}"),
+        output_dir=str(RUNS_DIR / f"rfdetr_{args.variant}{run_suffix(args.aug)}"),
         epochs=args.epochs,
         batch_size=args.batch,
         grad_accum_steps=args.grad_accum,

@@ -104,3 +104,12 @@ def coco_evaluate(predictions: dict, gt_json: Path = VAL_GT_JSON) -> dict:
 def save_json(obj, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+PREPARE_INFO = DATA_DIR / "prepare_info.json"
+
+
+def run_suffix(aug: str) -> str:
+    """Run-name suffix so augmented / oversampled runs don't overwrite the baseline ones."""
+    info = json.loads(PREPARE_INFO.read_text(encoding="utf-8")) if PREPARE_INFO.exists() else {}
+    return ("_os" if info.get("oversample") else "") + ("_aug" if aug != "default" else "")

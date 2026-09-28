@@ -3,16 +3,22 @@
 Both datasets use the exact same camera-based train/val split (see common.VAL_CAMS),
 so the two models are compared on identical data.
 
-Usage:  python prepare_data.py
+Usage:  python prepare_data.py                  # baseline
+        python prepare_data.py --oversample     # repeat train images that contain rare classes
 """
+import argparse
+import math
 import shutil
 from collections import Counter
 
 import pandas as pd
 from PIL import Image
 
-from common import (CLASS_NAMES, COCO_DIR, TRAIN_CSV, TRAIN_IMG_DIR, VAL_CAMS, YOLO_DIR, camera_of,
-                    save_json)
+from common import (CLASS_NAMES, COCO_DIR, PREPARE_INFO, TRAIN_CSV, TRAIN_IMG_DIR, VAL_CAMS, YOLO_DIR,
+                    camera_of, save_json)
+
+# duplicated image name -> original file in TRAIN_IMG_DIR (filled by oversample())
+SOURCE_OF = {}
 
 
 def load_annotations():
@@ -39,6 +45,31 @@ def load_annotations():
     return df, images, sizes
 
 
+def oversample(df, names, sizes, thresh, max_repeat):
+    """Repeat-factor sampling (LVIS): class c with image frequency f_c gets r_c = max(1, sqrt(thresh / f_c));
+    each image is repeated round(max r_c over its classes) times, capped at max_repeat.
+
+    mAP50 weighs every class equally, so rare classes (Tuktuk, Van, Pickup, Songthaew) matter as much as Car.
+    Copies are exact (same image, same boxes); on-the-fly augmentation makes them differ during training.
+    """
+    classes_of = df[df.image_id.isin(names)].groupby("image_id").class_id.apply(set).to_dict()
+    img_freq = Counter(c for cs in classes_of.values() for c in cs)
+    r_class = {c: max(1.0, math.sqrt(thresh / (img_freq[c] / len(names)))) for c in img_freq}
+
+    new_names, new_rows = [], []
+    for name in names:
+        reps = round(min(max_repeat, max((r_class[c] for c in classes_of.get(name, ())), default=1.0)))
+        for k in range(1, reps):
+            dup = f"{name[:-4]}__rep{k}.jpg"
+            SOURCE_OF[dup] = name
+            sizes[dup] = sizes[name]
+            new_names.append(dup)
+            new_rows.append(df[df.image_id == name].assign(image_id=dup))
+    print(f"oversample (thresh={thresh}, max_repeat={max_repeat}): +{len(new_names)} train images; repeat per class:",
+          {CLASS_NAMES[c]: round(r_class[c], 2) for c in sorted(r_class)})
+    return names + new_names, pd.concat([df, *new_rows], ignore_index=True)
+
+
 def write_yolo(df, split_images, sizes):
     if YOLO_DIR.exists():
         shutil.rmtree(YOLO_DIR)
@@ -49,7 +80,7 @@ def write_yolo(df, split_images, sizes):
         img_dir.mkdir(parents=True)
         lbl_dir.mkdir(parents=True)
         for name in names:
-            shutil.copy2(TRAIN_IMG_DIR / name, img_dir / name)
+            shutil.copy2(TRAIN_IMG_DIR / SOURCE_OF.get(name, name), img_dir / name)
             W, H = sizes[name]
             lines = []
             if name in by_img:
@@ -90,16 +121,25 @@ def write_coco(df, split_images, sizes):
         out = COCO_DIR / split
         out.mkdir(parents=True)
         for name in names:
-            shutil.copy2(TRAIN_IMG_DIR / name, out / name)
+            shutil.copy2(TRAIN_IMG_DIR / SOURCE_OF.get(name, name), out / name)
         save_json(coco_dict(df, names, sizes), out / "_annotations.coco.json")
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--oversample", action="store_true", help="repeat train images containing rare classes")
+    ap.add_argument("--os-thresh", type=float, default=0.3,
+                    help="classes present in fewer than this fraction of train images get repeated")
+    ap.add_argument("--os-max-repeat", type=int, default=4)
+    args = ap.parse_args()
+
     df, images, sizes = load_annotations()
     split_images = {
         "train": [n for n in images if camera_of(n) not in VAL_CAMS],
         "val": [n for n in images if camera_of(n) in VAL_CAMS],
     }
+    if args.oversample:  # train only: validation must stay a faithful estimate
+        split_images["train"], df = oversample(df, split_images["train"], sizes, args.os_thresh, args.os_max_repeat)
     for split, names in split_images.items():
         sub = df[df.image_id.isin(names)]
         cls = Counter(sub.class_id)
@@ -109,6 +149,9 @@ def main():
 
     write_yolo(df, split_images, sizes)
     write_coco(df, split_images, sizes)
+    save_json({"oversample": args.oversample,
+               "os_thresh": args.os_thresh if args.oversample else None,
+               "os_max_repeat": args.os_max_repeat if args.oversample else None}, PREPARE_INFO)
     print(f"YOLO dataset -> {YOLO_DIR}\nCOCO dataset -> {COCO_DIR}")
 
 
