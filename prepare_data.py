@@ -27,20 +27,55 @@ def load_annotations():
         with Image.open(TRAIN_IMG_DIR / name) as im:
             sizes[name] = im.size  # (w, h)
 
-    missing = set(df["image_id"]) - set(images)
-    if missing:
-        print(f"[warn] {len(missing)} annotated images not found in train/, dropping them")
-        df = df[~df["image_id"].isin(missing)]
+    cleaning = {"csv_rows": len(df)}
+
+    missing = df["image_id"].isin(set(df["image_id"]) - set(images))
+    cleaning["dropped_rows_image_missing"] = int(missing.sum())
+    if missing.any():
+        print(f"[warn] {int(missing.sum())} boxes on images not found in train/, dropping them")
+        df = df[~missing]
 
     # Clip boxes to the image and drop degenerate ones
     w = df["image_id"].map(lambda n: sizes[n][0])
     h = df["image_id"].map(lambda n: sizes[n][1])
     df = df.assign(x1=df.x1.clip(0, w), x2=df.x2.clip(0, w), y1=df.y1.clip(0, h), y2=df.y2.clip(0, h))
     bad = (df.x2 - df.x1 < 1) | (df.y2 - df.y1 < 1)
+    cleaning["dropped_boxes_degenerate"] = int(bad.sum())
     if bad.any():
         print(f"[warn] dropping {int(bad.sum())} degenerate boxes")
         df = df[~bad]
-    return df, images, sizes
+    return df, images, sizes, cleaning
+
+
+def drop_train_duplicates(df):
+    """Drop rows repeated exactly (same image, class and box) in the train split only.
+
+    A duplicate forces DETR's one-to-one matching to predict the same object twice. Validation keeps them so it
+    still mirrors the Kaggle ground truth, which presumably has the same repeats. Near-identical boxes with a
+    *different* class (mostly Car/Truck) are kept: they look systematic, so the test labels likely share them.
+    """
+    in_train = ~df["image_id"].map(camera_of).isin(VAL_CAMS)
+    dup = in_train & df.duplicated(["image_id", "class_id", "x1", "y1", "x2", "y2"])
+    print(f"dropping {int(dup.sum())} exact duplicate boxes from train")
+    return df[~dup], int(dup.sum())
+
+
+def split_stats(df, names):
+    """Per-split counts for the report: images, empty images, cameras, boxes per class and per COCO size bucket."""
+    sub = df[df.image_id.isin(names)]
+    area = (sub.x2 - sub.x1) * (sub.y2 - sub.y1)
+    cls = Counter(sub.class_id)
+    return {
+        "images": len(names),
+        "images_without_boxes": len(set(names) - set(sub.image_id)),
+        "cameras": sorted({camera_of(n) for n in names}, key=int),
+        "boxes": len(sub),
+        "boxes_per_class": {CLASS_NAMES[k]: cls.get(k, 0) for k in range(len(CLASS_NAMES))},
+        # COCO buckets, as used by AP_small / AP_medium / AP_large
+        "boxes_per_size": {"small (<32^2 px)": int((area < 32 ** 2).sum()),
+                           "medium": int(((area >= 32 ** 2) & (area < 96 ** 2)).sum()),
+                           "large (>=96^2 px)": int((area >= 96 ** 2).sum())},
+    }
 
 
 def oversample(df, names, sizes, thresh, max_repeat):
@@ -105,25 +140,32 @@ def main():
     ap.add_argument("--os-max-repeat", type=int, default=4)
     args = ap.parse_args()
 
-    df, images, sizes = load_annotations()
+    df, images, sizes, cleaning = load_annotations()
+    df, cleaning["dropped_boxes_duplicate_train"] = drop_train_duplicates(df)
     split_images = {
         "train": [n for n in images if camera_of(n) not in VAL_CAMS],
         "val": [n for n in images if camera_of(n) in VAL_CAMS],
     }
+    stats = {}
     if args.oversample:  # train only: validation must stay a faithful estimate
+        stats["train_before_oversample"] = split_stats(df, split_images["train"])
         split_images["train"], df = oversample(df, split_images["train"], sizes, args.os_thresh, args.os_max_repeat)
     for split, names in split_images.items():
-        sub = df[df.image_id.isin(names)]
-        cls = Counter(sub.class_id)
-        print(f"{split:5s}: {len(names):4d} images, {len(sub):5d} boxes, "
-              f"cams={sorted({camera_of(n) for n in names}, key=int)}")
-        print("       per class:", {k: cls.get(k, 0) for k in range(len(CLASS_NAMES))})
+        stats[split] = split_stats(df, names)
+        s = stats[split]
+        print(f"{split:5s}: {s['images']:4d} images ({s['images_without_boxes']} without boxes), "
+              f"{s['boxes']:5d} boxes, cams={s['cameras']}")
+        print("       per class:", s["boxes_per_class"])
+        print("       per size: ", s["boxes_per_size"])
 
     write_coco(df, split_images, sizes)
     save_json({"oversample": args.oversample,
                "os_thresh": args.os_thresh if args.oversample else None,
-               "os_max_repeat": args.os_max_repeat if args.oversample else None}, PREPARE_INFO)
-    print(f"COCO dataset -> {COCO_DIR}")
+               "os_max_repeat": args.os_max_repeat if args.oversample else None,
+               "val_cams": sorted(VAL_CAMS, key=int),
+               "cleaning": cleaning,
+               "stats": stats}, PREPARE_INFO)
+    print(f"COCO dataset -> {COCO_DIR}\nstats -> {PREPARE_INFO}")
 
 
 if __name__ == "__main__":
