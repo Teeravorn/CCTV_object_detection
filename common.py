@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 TRAIN_IMG_DIR = ROOT / "data_source" / "train"
 TEST_IMG_DIR = ROOT / "data_source" / "test"
-TRAIN_CSV = ROOT / "train.csv"
+TRAIN_CSV = ROOT / "data_source" / "train.csv"
 SAMPLE_SUB = ROOT / "sample_submission.csv"
 
 DATA_DIR = ROOT / "data"
