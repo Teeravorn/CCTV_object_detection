@@ -1,6 +1,6 @@
-"""Uniform inference wrappers so YOLO26 and RF-DETR are evaluated/predicted the same way.
+"""RF-DETR inference wrapper shared by evaluate.py and predict.py.
 
-Each detector returns {file_name: [(class_id, score, x1, y1, x2, y2), ...]} in original-image pixels.
+The detector returns {file_name: [(class_id, score, x1, y1, x2, y2), ...]} in original-image pixels.
 """
 import time
 from pathlib import Path
@@ -18,30 +18,6 @@ MIN_SIZE = 1.0
 def _keep(xyxy) -> bool:
     x1, y1, x2, y2 = xyxy
     return x2 - x1 >= MIN_SIZE and y2 - y1 >= MIN_SIZE
-
-
-class YoloDetector:
-    name = "YOLO26"
-
-    def __init__(self, weights: Path, imgsz: int = 640):
-        from ultralytics import YOLO
-        self.model = YOLO(str(weights))
-        self.imgsz = imgsz
-
-    def predict(self, paths: list[Path], batch: int = 32) -> dict:
-        out = {}
-        for i in range(0, len(paths), batch):
-            chunk = [str(p) for p in paths[i:i + batch]]
-            results = self.model.predict(chunk, imgsz=self.imgsz, conf=EVAL_CONF, max_det=MAX_DET,
-                                         half=True, verbose=False)
-            for p, r in zip(chunk, results):
-                b = r.boxes
-                xyxy = b.xyxy.cpu().numpy()
-                cls = b.cls.cpu().numpy().astype(int)
-                conf = b.conf.cpu().numpy()
-                out[Path(p).name] = [(int(c), float(s), *map(float, xy))
-                                     for c, s, xy in zip(cls, conf, xyxy) if _keep(xy)]
-        return out
 
 
 class RFDETRDetector:
@@ -80,11 +56,3 @@ def timed_predict(detector, paths: list[Path]) -> tuple[dict, float]:
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     return preds, (time.perf_counter() - t0) * 1000 / max(len(paths), 1)
-
-
-def load_detector(kind: str, weights: Path, imgsz: int = 640):
-    if kind == "yolo":
-        return YoloDetector(weights, imgsz)
-    if kind == "rfdetr":
-        return RFDETRDetector(weights)
-    raise ValueError(kind)

@@ -1,7 +1,6 @@
-"""Convert train.csv into a YOLO dataset (for YOLO26) and a COCO dataset (for RF-DETR).
+"""Convert train.csv into a COCO dataset for RF-DETR.
 
-Both datasets use the exact same camera-based train/val split (see common.VAL_CAMS),
-so the two models are compared on identical data.
+Train/val are split by camera (see common.VAL_CAMS) so validation mimics the unseen test cameras.
 
 Usage:  python prepare_data.py                  # baseline
         python prepare_data.py --oversample     # repeat train images that contain rare classes
@@ -14,8 +13,7 @@ from collections import Counter
 import pandas as pd
 from PIL import Image
 
-from common import (CLASS_NAMES, COCO_DIR, PREPARE_INFO, TRAIN_CSV, TRAIN_IMG_DIR, VAL_CAMS, YOLO_DIR,
-                    camera_of, save_json)
+from common import CLASS_NAMES, COCO_DIR, PREPARE_INFO, TRAIN_CSV, TRAIN_IMG_DIR, VAL_CAMS, camera_of, save_json
 
 # duplicated image name -> original file in TRAIN_IMG_DIR (filled by oversample())
 SOURCE_OF = {}
@@ -70,32 +68,6 @@ def oversample(df, names, sizes, thresh, max_repeat):
     return names + new_names, pd.concat([df, *new_rows], ignore_index=True)
 
 
-def write_yolo(df, split_images, sizes):
-    if YOLO_DIR.exists():
-        shutil.rmtree(YOLO_DIR)
-    by_img = {k: g for k, g in df.groupby("image_id")}
-    for split, names in split_images.items():
-        img_dir = YOLO_DIR / "images" / split
-        lbl_dir = YOLO_DIR / "labels" / split
-        img_dir.mkdir(parents=True)
-        lbl_dir.mkdir(parents=True)
-        for name in names:
-            shutil.copy2(TRAIN_IMG_DIR / SOURCE_OF.get(name, name), img_dir / name)
-            W, H = sizes[name]
-            lines = []
-            if name in by_img:
-                for r in by_img[name].itertuples():
-                    cx, cy = (r.x1 + r.x2) / 2 / W, (r.y1 + r.y2) / 2 / H
-                    bw, bh = (r.x2 - r.x1) / W, (r.y2 - r.y1) / H
-                    lines.append(f"{r.class_id} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}")
-            # empty label file = background image (kept as negatives)
-            (lbl_dir / (name[:-4] + ".txt")).write_text("\n".join(lines), encoding="utf-8")
-
-    yaml = [f"path: {YOLO_DIR.as_posix()}", "train: images/train", "val: images/val", "names:"]
-    yaml += [f"  {i}: {n}" for i, n in enumerate(CLASS_NAMES)]
-    (YOLO_DIR / "data.yaml").write_text("\n".join(yaml) + "\n", encoding="utf-8")
-
-
 def coco_dict(df, names, sizes):
     images, anns = [], []
     by_img = {k: g for k, g in df.groupby("image_id")}
@@ -147,12 +119,11 @@ def main():
               f"cams={sorted({camera_of(n) for n in names}, key=int)}")
         print("       per class:", {k: cls.get(k, 0) for k in range(len(CLASS_NAMES))})
 
-    write_yolo(df, split_images, sizes)
     write_coco(df, split_images, sizes)
     save_json({"oversample": args.oversample,
                "os_thresh": args.os_thresh if args.oversample else None,
                "os_max_repeat": args.os_max_repeat if args.oversample else None}, PREPARE_INFO)
-    print(f"YOLO dataset -> {YOLO_DIR}\nCOCO dataset -> {COCO_DIR}")
+    print(f"COCO dataset -> {COCO_DIR}")
 
 
 if __name__ == "__main__":

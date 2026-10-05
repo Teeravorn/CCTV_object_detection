@@ -1,4 +1,4 @@
-"""Shared paths, split definition, and COCO-style evaluation for YOLO26 vs RF-DETR."""
+"""Shared paths, split definition, and COCO-style evaluation for RF-DETR."""
 import json
 import re
 from pathlib import Path
@@ -10,7 +10,6 @@ TRAIN_CSV = ROOT / "train.csv"
 SAMPLE_SUB = ROOT / "sample_submission.csv"
 
 DATA_DIR = ROOT / "data"
-YOLO_DIR = DATA_DIR / "yolo"
 COCO_DIR = DATA_DIR / "coco"
 RUNS_DIR = ROOT / "runs"
 RESULTS_DIR = ROOT / "results"

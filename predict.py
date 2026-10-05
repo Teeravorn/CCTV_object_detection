@@ -1,9 +1,8 @@
 """Predict the test set and write a submission in the sample_submission.csv format.
 
 Usage:
-  python predict.py --kind yolo   --weights runs/yolo26s/weights/best.pt
-  python predict.py --kind rfdetr --weights runs/rfdetr_medium/checkpoint_best_total.pth
-Output: results/submission_<kind>.csv
+  python predict.py --weights runs/rfdetr_medium/checkpoint_best_total.pth
+Output: results/submission_rfdetr.csv
 """
 import argparse
 from pathlib import Path
@@ -11,14 +10,12 @@ from pathlib import Path
 import pandas as pd
 
 from common import RESULTS_DIR, SAMPLE_SUB, TEST_IMG_DIR, submission_id_to_file
-from detectors import load_detector
+from detectors import RFDETRDetector
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--kind", required=True, choices=["yolo", "rfdetr"])
     ap.add_argument("--weights", required=True, type=Path)
-    ap.add_argument("--imgsz", type=int, default=640, help="YOLO only")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--id-style", choices=["file", "sample"], default="file",
                     help="file: test file name as on Kaggle (1068_20260825_060110.jpg) - scored 0 with 'sample'; "
@@ -31,7 +28,7 @@ def main():
     if missing:
         raise FileNotFoundError(f"{len(missing)} test images not found, e.g. {missing[:3]}")
 
-    det = load_detector(args.kind, args.weights, args.imgsz)
+    det = RFDETRDetector(args.weights)
     preds = det.predict([TEST_IMG_DIR / f for f in file_of.values()])
 
     rows, empty = [], 0
@@ -46,7 +43,7 @@ def main():
 
     out = pd.DataFrame(rows, columns=["image_id", "class_id", "confidence", "x1", "y1", "x2", "y2"])
     out.insert(0, "id", range(len(out)))
-    path = args.out or RESULTS_DIR / f"submission_{args.kind}.csv"
+    path = args.out or RESULTS_DIR / "submission_rfdetr.csv"
     path.parent.mkdir(exist_ok=True)
     out.to_csv(path, index=False, encoding="utf-8")
     print(f"{len(sub_ids)} images, {len(out)} rows ({empty} images without detections) -> {path}")
