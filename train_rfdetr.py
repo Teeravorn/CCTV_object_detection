@@ -12,7 +12,7 @@ adapted to rfdetr 1.11:
   5. visualise      annotation vs detection side by side
 
 Usage:
-  python train_rfdetr.py --variant medium --epochs 50 [--aug strong]
+  python train_rfdetr.py --variant medium --epochs 50 [--aug strong] [--seed 42]
   python train_rfdetr.py --eval-only --weights runs/rfdetr_medium/checkpoint_best_ema.pth
 Outputs in runs/rfdetr_<variant>[_os][_aug]/ : checkpoints, eval_valid.json, val_predictions.jpg
 """
@@ -40,6 +40,10 @@ def variant_class(variant):
 
 # ---------------------------------------------------------------- 1. train
 def train(args, out_dir: Path):
+    from pytorch_lightning import seed_everything
+
+    # Seed before building the model too: model.train(seed=) only seeds once fit starts.
+    seed_everything(args.seed, workers=True)
     model = variant_class(args.variant)()
     kwargs = {}
     if args.resolution:
@@ -62,6 +66,7 @@ def train(args, out_dir: Path):
         run_test=False,  # no labelled test split; the real test/ set is scored via predict.py
         tensorboard=True,
         progress_bar="tqdm",
+        seed=args.seed,  # python/numpy/torch + dataloader workers (pytorch_lightning.seed_everything)
         **kwargs,
     )
     return model
@@ -180,6 +185,8 @@ def main():
                     help="default: model's native (nano 384, small 512, medium 576, large 704); must be /32")
     ap.add_argument("--patience", type=int, default=15)
     ap.add_argument("--workers", type=int, default=2)
+    ap.add_argument("--seed", type=int, default=42,
+                    help="fixed for reproducibility; GPU kernels are not bit-exact, so reruns are close, not identical")
     ap.add_argument("--aug", choices=["default", "strong"], default="default",
                     help="strong: HorizontalFlip + photometric (fog/blur/noise/JPEG/...), see augment.py")
     ap.add_argument("--eval-only", action="store_true", help="skip training; evaluate --weights or the run's best")
