@@ -18,6 +18,7 @@ Outputs in runs/rfdetr_<variant>[_os][_aug]/ : checkpoints, eval_valid.json, val
 """
 import argparse
 import gc
+import math
 import sys
 from pathlib import Path
 
@@ -31,6 +32,9 @@ VARIANTS = {"nano": "RFDETRNano", "small": "RFDETRSmall", "medium": "RFDETRMediu
 # checkpoint_best_total.pth is written when training finishes; the others exist while it runs
 BEST_CHECKPOINTS = ["checkpoint_best_total.pth", "checkpoint_best_ema.pth", "checkpoint_best_regular.pth"]
 VIS_THRESHOLD = 0.5
+
+# defaults value Parameters
+EFFECTIVE_BATCH = 16
 
 
 def variant_class(variant):
@@ -52,21 +56,37 @@ def train(args, out_dir: Path):
         from augment import rfdetr_aug_config
         kwargs["aug_config"] = rfdetr_aug_config()
 
-    # Notebook: keep batch_size * grad_accum_steps = 16 (A100: 16x1, T4: 4x4). RTX 4060 8 GB -> 4x4.
+    # 'auto': rfdetr probes the batch size and overwrites grad_accum_steps to reach auto_batch_target_effective.
+    # Same ceil rule as rfdetr's auto-batch, so e.g. RTX 4060 8 GB with --batch 4 -> 4x4.
+    grad_accum = 1 if args.batch == "auto" else math.ceil(EFFECTIVE_BATCH / args.batch)
+
+    # rfdetr's managed schedules: linear warmup from 0 over warmup_epochs, then
+    #   cosine: lr * (min_factor + (1 - min_factor) * 0.5 * (1 + cos(pi * progress)))  over the remaining steps
+    #   step:   lr until epoch lr_drop, then lr * 0.1
+    # Its default is step with lr_drop=100, i.e. a constant lr for any run shorter than 100 epochs.
+    if args.lr_schedule == "cosine":
+        sched_kwargs = {"min_factor": args.min_lr_factor}
+    else:
+        sched_kwargs = {"lr_drop": args.lr_drop or round(args.epochs * 2 / 3)}
+
     model.train(
         dataset_dir=str(COCO_DIR),
         output_dir=str(out_dir),
         epochs=args.epochs,
         batch_size=args.batch,
-        grad_accum_steps=args.grad_accum,
+        grad_accum_steps=grad_accum,
+        auto_batch_target_effective=EFFECTIVE_BATCH,
         lr=args.lr,
+        lr_scheduler=args.lr_schedule,
+        lr_scheduler_kwargs=sched_kwargs,
+        warmup_epochs=args.warmup_epochs,
         num_workers=args.workers,
         early_stopping=True,
         early_stopping_patience=args.patience,
         run_test=False,  # no labelled test split; the real test/ set is scored via predict.py
         tensorboard=True,
         progress_bar="tqdm",
-        seed=args.seed,  # python/numpy/torch + dataloader workers (pytorch_lightning.seed_everything)
+        seed=args.seed,
         **kwargs,
     )
     return model
@@ -178,12 +198,16 @@ def main():
     ap.add_argument("--variant", default="medium", choices=VARIANTS)
     ap.add_argument("--epochs", type=int, default=50)
     ap.add_argument("--batch", type=lambda s: s if s == "auto" else int(s), default=4,
-                    help="int, or 'auto' = rfdetr probes the largest batch that fits and sets grad accum to reach 16")
-    ap.add_argument("--grad-accum", type=int, default=4, help="keep batch * grad_accum = 16 (notebook)")
-    ap.add_argument("--lr", type=float, default=1e-4)
+                    help=f"int, or 'auto' = rfdetr probes the largest batch that fits")
+    ap.add_argument("--lr", type=float, default=1e-4, help="initial learning rate")
+    ap.add_argument("--lr-schedule", choices=["cosine", "step"], default="cosine",
+                    help="cosine: anneal to lr * --min-lr-factor by the last epoch; step: lr * 0.1 after --lr-drop")
+    ap.add_argument("--warmup-epochs", type=float, default=1.0, help="linear warmup from 0 to --lr")
+    ap.add_argument("--min-lr-factor", type=float, default=0.01, help="cosine only: final lr = lr * this")
+    ap.add_argument("--lr-drop", type=int, default=None, help="step only: epoch of the 10x drop (default 2/3 of --epochs)")
     ap.add_argument("--resolution", type=int, default=None,
                     help="default: model's native (nano 384, small 512, medium 576, large 704); must be /32")
-    ap.add_argument("--patience", type=int, default=15)
+    ap.add_argument("--patience", type=int, default=10)
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--seed", type=int, default=42,
                     help="fixed for reproducibility; GPU kernels are not bit-exact, so reruns are close, not identical")
