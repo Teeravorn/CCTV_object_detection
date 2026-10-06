@@ -22,7 +22,7 @@ import gc
 import math
 import sys
 from pathlib import Path
-import time
+from datetime import datetime
 
 from common import (
     CLASS_NAMES,
@@ -287,9 +287,9 @@ def main():
     ap.add_argument("--vis", type=int, default=6, help="validation images to draw (0 = none)")
     args = ap.parse_args()
 
-    datetime = time.now().strftime("%Y%m%d_%H%M%S")
+    datetime_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    out_dir = RUNS_DIR / f"rfdetr_{args.variant}{run_suffix(args.aug)}_{datetime}"
+    out_dir = RUNS_DIR / f"rfdetr_{args.variant}{run_suffix(args.aug)}_{datetime_str}"
     if not args.eval_only:
         cleanup_gpu_memory(train(args, out_dir))
 
