@@ -1,7 +1,3 @@
-"""Dataset report: class balance, camera coverage, box sizes and label problems in train.csv.
-
-Usage:  python analyze_data.py      # prints the report, writes results/label_issues.csv for manual review
-"""
 from collections import Counter
 
 import numpy as np

@@ -1,22 +1,3 @@
-"""Fine-tune RF-DETR on the Bangkok CCTV dataset, then evaluate and visualise it.
-
-Follows Roboflow's "How to Train RF-DETR on a Custom Dataset" notebook
-(https://github.com/roboflow/rf-detr, roboflow/notebooks how-to-finetune-rf-detr-on-detection-dataset.ipynb),
-adapted to rfdetr 1.11:
-  1. train          model = RFDETRMedium(); model.train(dataset_dir=..., batch_size * grad_accum_steps = 16)
-  2. free GPU       cleanup_gpu_memory(model)
-  3. load best      RFDETRMedium(pretrain_weights=".../checkpoint_best_total.pth")
-                    + model.inference()   (the notebook's optimize_for_inference(), renamed in rfdetr 1.9+)
-  4. evaluate       predict(threshold=0) on every validation image, supervision MeanAveragePrecision,
-                    plus the Kaggle-equivalent pycocotools mAP50 (common.coco_evaluate)
-  5. visualise      annotation vs detection side by side
-
-Usage:
-  python train_rfdetr.py --variant medium --epochs 50 [--aug strong] [--seed 42]
-  python train_rfdetr.py --eval-only --weights runs/rfdetr_medium/checkpoint_best_ema.pth
-Outputs in runs/rfdetr_<variant>[_os][_aug]/ : checkpoints, eval_valid.json, val_predictions.jpg
-"""
-
 import argparse
 import gc
 import math

@@ -1,7 +1,3 @@
-"""RF-DETR inference wrapper shared by evaluate.py and predict.py.
-
-The detector returns {file_name: [(class_id, score, x1, y1, x2, y2), ...]} in original-image pixels.
-"""
 import time
 from pathlib import Path
 

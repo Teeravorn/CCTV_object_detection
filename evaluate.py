@@ -1,12 +1,3 @@
-"""Compare trained RF-DETR checkpoints on the held-out validation cameras.
-
-Every checkpoint is scored by the same pycocotools evaluator on the same images, with conf>=0.001.
-The headline metric is mAP50, matching the Kaggle leaderboard (pycocotools, IoU 0.5, maxDets 100).
-
-Usage:
-  python evaluate.py --rfdetr runs/rfdetr_medium/checkpoint_best_total.pth [runs/rfdetr_medium_aug/... ...]
-Outputs results/comparison.json and results/comparison.md
-"""
 import argparse
 import math
 from pathlib import Path

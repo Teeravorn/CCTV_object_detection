@@ -1,23 +1,3 @@
-"""Find duplicate labels in train.csv (one object labelled with two classes) and render them for manual review.
-
-A pair is a duplicate when both boxes are in the same image, have different classes and IoU > --iou
-(same-class duplicates are not reported). For every pair it writes
-one review image: the full frame (both boxes highlighted, other boxes in grey) next to an upscaled crop.
-The `dedupe_action` column shows what the old `prepare_data.py --dedupe` rule would have done with the pair
-(that flag has been removed; nothing applies these decisions to the training data any more).
-
-Review: write the class to keep (or `both`) in the `review` column of duplicates.csv. On the next run the
-filled-in cells are first saved to results/duplicate_overrides.csv, so re-running never loses a review;
-the column is then pre-filled from that file.
-
-Usage:  python find_duplicates.py                  # IoU > 0.8 -> results/duplicates/
-        python find_duplicates.py --iou 0.5 --out results/dup_05
-
-Output:
-  <out>/duplicates.csv            one row per pair (+ empty `review` column to fill in)
-  <out>/<ClassA+ClassB>/*.jpg     one review image per pair, grouped by class pair
-  <out>/overview_<pair>.jpg       grid of all crops of that class pair, for quick browsing
-"""
 import argparse
 import shutil
 from pathlib import Path
@@ -27,11 +7,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 from common import CLASS_NAMES, RESULTS_DIR, TRAIN_CSV, TRAIN_IMG_DIR, VAL_CAMS, camera_of
 
-# The dedupe rules and helpers below used to live in prepare_data.py / common.py (prepare_data.py --dedupe),
-# which has since been removed; they are kept here so this review tool still runs on its own.
+
 DEDUPE_OVERRIDES = RESULTS_DIR / "duplicate_overrides.csv"
-# Same object labelled twice with different classes (IoU > DEDUPE_IOU): the lower-ranked class was dropped.
-# Bus+Truck / Bus+Car were genuinely mixed, so both boxes were kept.
+
 DEDUPE_IOU = 0.85
 DEDUPE_RANK = {"Truck": 0, "Car": 1, "Bus": 2, "Motorcycle": 3, "Tuktuk": 3, "Van": 3, "Pickup": 3, "Songthaew": 3}
 DEDUPE_AMBIGUOUS = [{"Bus", "Truck"}, {"Bus", "Car"}]

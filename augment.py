@@ -1,13 +1,3 @@
-"""Augmentation preset for train_rfdetr.py --aug strong.
-
-Test cameras are unseen and include hazy/foggy lenses, dusk/night shots and heavy JPEG artefacts,
-so the extra augmentations are mostly photometric. Geometric ones stay mild because objects are tiny
-(~17x27 px): rotation/shear loosen boxes and strong down-scaling makes objects vanish.
-
-Pixel-level transforms need `albumentations` (<3 for rfdetr):
-  pip install --only-binary=:all: "albumentations>=1.4.24,<3"
-"""
-
 # Photometric pipeline as Albumentations specs [{name: params}], passed as-is to RF-DETR.
 PIXEL_SPECS = [
     {"RandomBrightnessContrast": {"brightness_limit": 0.25, "contrast_limit": 0.25, "p": 0.4}},

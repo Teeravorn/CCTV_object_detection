@@ -1,10 +1,3 @@
-"""Predict the test set and write a submission in the sample_submission.csv format.
-
-Usage:
-  python predict.py --weights runs/rfdetr_medium/checkpoint_best_total.pth
-  python predict.py --weights runs/rfdetr_medium/checkpoint_best_total.pth --dedupe-iou 0.9
-Output: results/submission_rfdetr.csv (or results/submission_rfdetr_dedupe0.9_s0.3.csv)
-"""
 import argparse
 from pathlib import Path
 
